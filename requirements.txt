@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pyqt6
+httpx
+pydantic
+nuitka

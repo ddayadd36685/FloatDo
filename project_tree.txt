@@ -1,0 +1,20 @@
+nuitka_test
+├── assets
+├── data
+├── src
+│   ├── backend
+│   │   ├── __init__.py
+│   │   └── main.py
+│   ├── frontend
+│   │   ├── __init__.py
+│   │   ├── api_client.py
+│   │   ├── floating_ball.py
+│   │   └── task_window.py
+│   └── shared
+│       └── paths.py
+├── build_exe.bat
+├── main.py
+├── PRD.md
+├── README.md
+├── requirements.txt
+└── save_tree.py
