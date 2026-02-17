@@ -26,6 +26,15 @@ class ApiClient:
             print(f"API Error (create_list): {e}")
             return False
 
+    def delete_list(self, list_id: str) -> bool:
+        try:
+            response = self.client.delete(f"/lists/{list_id}")
+            response.raise_for_status()
+            return True
+        except Exception as e:
+            print(f"API Error (delete_list): {e}")
+            return False
+
     def get_tasks(self, list_id: Optional[str] = None) -> List[Dict[str, Any]]:
         try:
             params = {}

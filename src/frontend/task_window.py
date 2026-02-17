@@ -2,7 +2,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, 
     QLineEdit, QPushButton, QListWidgetItem, QCheckBox, 
     QLabel, QMessageBox, QFrame, QGraphicsDropShadowEffect,
-    QGraphicsOpacityEffect, QScrollArea, QInputDialog, QDialog, QMenu, QApplication
+    QGraphicsOpacityEffect, QScrollArea, QInputDialog, QDialog, QMenu, QApplication,
+    QWidgetAction
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QPoint, QPropertyAnimation, QEasingCurve, QTimer, QSize, QThread
 from PyQt6.QtGui import QColor, QIcon, QFont, QPainter, QBrush, QPen, QAction
@@ -109,6 +110,79 @@ class TaskCard(QFrame):
         f.setStrikeOut(completed)
         self.label.setFont(f)
 
+class ListMenuItemWidget(QWidget):
+    def __init__(self, list_data, is_selected, theme, on_click, on_delete=None):
+        super().__init__()
+        self.list_data = list_data
+        self.on_click = on_click
+        self.theme = theme
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(15, 6, 15, 6) # Match menu item padding
+        layout.setSpacing(10)
+        
+        # Checkmark + Name
+        prefix = "✓ " if is_selected else "   "
+        self.label = QLabel(f"{prefix}{list_data['name']}")
+        self.label.setFont(QFont("Segoe UI", 10))
+        
+        layout.addWidget(self.label, 1) # Expand to push delete button to right
+        
+        # Delete Button
+        if on_delete:
+            self.delete_btn = QPushButton("×")
+            self.delete_btn.setFixedSize(24, 24)
+            self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.delete_btn.clicked.connect(on_delete)
+            # Style for delete button
+            self.delete_btn.setStyleSheet(f"""
+                QPushButton {{
+                    color: {theme.secondary_text};
+                    border: none;
+                    background: transparent;
+                    font-weight: bold;
+                    font-size: 16px;
+                    border-radius: 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: #FF7675;
+                    color: white;
+                }}
+            """)
+            layout.addWidget(self.delete_btn)
+        
+        self.setLayout(layout)
+        self.update_style(False)
+        
+    def enterEvent(self, event):
+        self.update_style(True)
+        super().enterEvent(event)
+        
+    def leaveEvent(self, event):
+        self.update_style(False)
+        super().leaveEvent(event)
+        
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Check if we clicked the delete button (handled by its own signal)
+            # If we are here, it means we clicked the widget background/label
+            self.on_click()
+            
+    def update_style(self, hover):
+        if hover:
+            self.setStyleSheet(f"background-color: {self.theme.accent}; border-radius: 4px;")
+            self.label.setStyleSheet("color: #FFFFFF; background: transparent; border: none;")
+            # When hovering the item, delete button text might need to be visible/white if it's there
+            if hasattr(self, 'delete_btn'):
+                 # Keep delete button style, but maybe ensure it looks good on accent bg
+                 # The button has its own hover style which is red.
+                 # Non-hover state on accent bg:
+                 pass
+        else:
+            self.setStyleSheet("background-color: transparent;")
+            self.label.setStyleSheet(f"color: {self.theme.text}; background: transparent; border: none;")
+
 class CustomTitleBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -159,16 +233,6 @@ class CustomTitleBar(QWidget):
                 font-size: 13px;
                 color: {theme.text};
             }}
-            QMenu::item {{
-                padding: 6px 24px;
-                border-radius: 6px;
-                background-color: transparent;
-                color: {theme.text};
-            }}
-            QMenu::item:selected {{
-                background-color: {theme.accent};
-                color: #FFFFFF;
-            }}
             QMenu::separator {{
                 height: 1px;
                 background: {theme.border};
@@ -185,13 +249,29 @@ class CustomTitleBar(QWidget):
         menu.addAction(list_header)
         
         for lst in lists:
-            action = QAction(lst['name'], self)
-            # Mark current list
-            if lst['id'] == task_window.current_list_id:
-                action.setText(f"✓ {lst['name']}")
+            # Define callbacks
+            def on_switch(l=lst):
+                task_window.switch_list(l['id'], l['name'])
+                menu.close()
+                
+            on_delete = None
+            if lst['id'] != 'default':
+                def on_delete_cb(checked=False, l=lst):
+                    # Close menu first to show dialog clearly
+                    menu.close()
+                    task_window.confirm_delete_list(l['id'], l['name'])
+                on_delete = on_delete_cb
             
-            # Use closure to capture list_id
-            action.triggered.connect(lambda checked, l=lst: task_window.switch_list(l['id'], l['name']))
+            # Create WidgetAction
+            action = QWidgetAction(menu)
+            widget = ListMenuItemWidget(
+                lst, 
+                lst['id'] == task_window.current_list_id, 
+                theme, 
+                on_switch, 
+                on_delete
+            )
+            action.setDefaultWidget(widget)
             menu.addAction(action)
             
         new_list_action = QAction("+ 新建清单", self)
@@ -510,3 +590,30 @@ class TaskWindow(QWidget):
             # This implements the user request: "clean up (reject) then hide panel"
             if getattr(dialog, 'lost_focus', False):
                 self.hide()
+
+    def confirm_delete_list(self, list_id, list_name):
+        from src.frontend.custom_dialog import CustomConfirmDialog
+        
+        # Prevent deleting system lists if any (though 'default' is usually hidden or protected by backend)
+        # But let's check explicitly if backend protects 'default'
+        if list_id == 'default':
+            QMessageBox.information(self, "提示", "默认清单不能删除")
+            return
+            
+        # Confirm deletion using CustomConfirmDialog
+        confirmed = CustomConfirmDialog.confirm(
+            self, 
+            "删除清单", 
+            f"确定要删除清单 '{list_name}' 吗？\n该清单下的所有任务也将被删除。"
+        )
+        
+        if confirmed:
+            if self.api.delete_list(list_id):
+                # Check if we deleted the current list
+                if self.current_list_id == list_id:
+                    self.switch_list('default', '今日任务')
+                else:
+                    # Just refresh tasks to be safe, though list deletion shouldn't affect current view if different
+                    self.refresh_tasks()
+            else:
+                QMessageBox.warning(self, "错误", "删除清单失败")

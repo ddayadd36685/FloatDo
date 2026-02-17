@@ -100,6 +100,31 @@ async def create_list(task_list: TaskList):
     save_lists()
     return task_list
 
+@app.delete("/lists/{list_id}")
+async def delete_list(list_id: str):
+    global task_lists, tasks
+    
+    # Prevent deleting the default list if needed (optional, but good practice)
+    # However, if user wants to delete it, maybe we should allow it but ensure a default always exists.
+    # For now, let's assume "default" list ID is "default" and cannot be deleted.
+    if list_id == "default":
+        raise HTTPException(status_code=400, detail="Cannot delete default list")
+        
+    # Find list
+    list_to_delete = next((l for l in task_lists if l.id == list_id), None)
+    if not list_to_delete:
+        raise HTTPException(status_code=404, detail="List not found")
+        
+    # Delete list
+    task_lists = [l for l in task_lists if l.id != list_id]
+    
+    # Delete associated tasks
+    tasks = [t for t in tasks if t.list_id != list_id]
+    
+    save_lists()
+    save_tasks()
+    return {"status": "success"}
+
 # --- Task Endpoints ---
 
 @app.get("/tasks", response_model=List[Task])
