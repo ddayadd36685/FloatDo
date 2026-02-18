@@ -22,6 +22,7 @@ nuitka ^
     --include-data-dir=assets=assets ^
     --output-dir=dist ^
     --output-filename=TodoApp.exe ^
+    --windows-icon-from-ico=assets/icon.ico ^
     --windows-console-mode=disable ^
     --company-name="MyTodoApp" ^
     --product-name="TodoApp" ^

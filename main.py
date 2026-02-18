@@ -2,7 +2,8 @@ import sys
 import threading
 import time
 import multiprocessing
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
+from PyQt6.QtGui import QIcon, QAction
 
 # Adjust path to ensure imports work both in dev and compiled mode
 import os
@@ -11,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from src.backend.main import start_backend
 from src.frontend.floating_ball import FloatingBall
 from src.frontend.task_window import TaskWindow
+from src.shared.paths import get_asset_path
 
 def run_backend():
     # Disable signal handling in uvicorn when running in a thread
@@ -33,6 +35,11 @@ def main():
     # 3. Start PyQt Application
     app = QApplication(sys.argv)
     
+    # Set App Icon
+    icon_path = get_asset_path('icon.png')
+    app_icon = QIcon(icon_path)
+    app.setWindowIcon(app_icon)
+    
     # Prevent the app from quitting when the last window is closed
     # because we want the floating ball to persist even if task window is closed
     app.setQuitOnLastWindowClosed(False)
@@ -49,8 +56,28 @@ def main():
 
     ball.clicked_callback = show_tasks
     ball.show()
-
-    # 6. Run Event Loop
+    
+    # 6. System Tray Icon
+    tray_icon = QSystemTrayIcon(app)
+    tray_icon.setIcon(app_icon)
+    
+    # Tray Menu
+    tray_menu = QMenu()
+    
+    show_action = QAction("显示悬浮球", app)
+    show_action.triggered.connect(ball.show)
+    tray_menu.addAction(show_action)
+    
+    tray_menu.addSeparator()
+    
+    quit_action = QAction("退出", app)
+    quit_action.triggered.connect(app.quit)
+    tray_menu.addAction(quit_action)
+    
+    tray_icon.setContextMenu(tray_menu)
+    tray_icon.show()
+    
+    # 7. Run Event Loop
     sys.exit(app.exec())
 
 if __name__ == "__main__":

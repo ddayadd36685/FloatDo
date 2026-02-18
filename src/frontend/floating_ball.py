@@ -225,6 +225,10 @@ class FloatingBall(QWidget):
         settings_action.triggered.connect(self.open_settings)
         menu.addAction(settings_action)
         
+        hide_action = QAction("隐藏悬浮球", self)
+        hide_action.triggered.connect(self.hide)
+        menu.addAction(hide_action)
+        
         menu.addSeparator()
         
         exit_action = QAction("退出程序", self)
